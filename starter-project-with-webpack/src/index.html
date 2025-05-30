@@ -4,7 +4,7 @@
     <meta http-equiv="Content-Type" content="text/html;charset=UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="shortcut icon" href="favicon.png" />
-    <script src="service-worker.js"></script>
+    <link rel="manifest" href="/manifest.json" />
 
 
     <title>Story App</title>
@@ -23,6 +23,13 @@
           </ul>
         </nav>
         <button id="drawer-button" class="drawer-button">☰</button>
+        <!-- HTML -->
+        <label>
+          <input type="checkbox" id="toggle-notification">
+          Aktifkan Notifikasi
+        </label>
+        <div id="notif-status"></div>
+
       </div>
     </header>
     <main id="main-content" class="main-content"></main>

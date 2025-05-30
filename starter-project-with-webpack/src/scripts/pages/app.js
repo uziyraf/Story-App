@@ -10,15 +10,18 @@ class App {
   #content = null;
   #drawerButton = null;
   #navigationDrawer = null;
+  #toggleNotification = null;  // Tambahan properti toggle
   #currentPage = null;
 
-  constructor({ navigationDrawer, drawerButton, content }) {
+  constructor({ navigationDrawer, drawerButton, content, toggleNotification }) {
     this.#content = content;
     this.#drawerButton = drawerButton;
     this.#navigationDrawer = navigationDrawer;
+    this.#toggleNotification = toggleNotification;
 
     this._setupDrawer();
     this._renderNavbar();
+    this._setupToggleNotification(); // Setup toggle notifikasi
 
     this._initPushSubscription();
   }
@@ -32,6 +35,11 @@ class App {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         await subscribeUserToPush();
+        if (this.#toggleNotification) this.#toggleNotification.checked = true; // sync toggle UI
+        this._updateNotifStatus('Notifikasi aktif');
+      } else {
+        if (this.#toggleNotification) this.#toggleNotification.checked = false;
+        this._updateNotifStatus('Izin notifikasi ditolak');
       }
     } catch (error) {
       console.error('Push subscription failed:', error);
@@ -59,6 +67,38 @@ class App {
     });
   }
 
+  _setupToggleNotification() {
+    if (!this.#toggleNotification) {
+      console.warn('Toggle notification element (#toggle-notification) not found in DOM');
+      return;
+    }
+
+    this.#toggleNotification.addEventListener('change', async (event) => {
+      if (event.target.checked) {
+        // Aktifkan push notification
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          await subscribeUserToPush();
+          this._updateNotifStatus('Notifikasi aktif');
+        } else {
+          this.#toggleNotification.checked = false;
+          this._updateNotifStatus('Izin notifikasi ditolak');
+        }
+      } else {
+        // Nonaktifkan push notification
+        await unsubscribeUserFromPush();
+        this._updateNotifStatus('Notifikasi dinonaktifkan');
+      }
+    });
+  }
+
+  _updateNotifStatus(message) {
+    const statusElem = document.getElementById('notif-status');
+    if (statusElem) {
+      statusElem.textContent = message;
+    }
+  }
+
   async renderPage() {
     if (this.#currentPage && typeof this.#currentPage.cleanup === 'function') {
       this.#currentPage.cleanup();
@@ -71,7 +111,6 @@ class App {
       return;
     }
 
-    // Add fade-out class and wait for animation to finish
     this.#content.classList.add('fade-out');
     await new Promise((resolve) => {
       this.#content.addEventListener('animationend', resolve, { once: true });
@@ -126,7 +165,6 @@ class App {
         window.location.hash = '#/login';
       });
     } else {
-      // User is not logged in
       navList.innerHTML = `
         <li><a href="#/login">Login</a></li>
         <li><a href="#/register">Register</a></li>

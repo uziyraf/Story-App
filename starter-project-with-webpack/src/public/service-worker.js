@@ -1,328 +1,185 @@
-// service-worker.js
-const CACHE_VERSION = 'v1.0.0';
+const CACHE_VERSION = 'v1.0.1';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 
-// Daftar file yang akan di-cache
 const STATIC_CACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.json',
-  // Tambahkan file CSS, JS, dan asset lainnya sesuai kebutuhan
-  // '/styles/styles.css',
-  // '/dist/bundle.js',
-  // '/images/icon-192x192.png',
-  // '/images/icon-512x512.png',
+  '/offline.html',
+  '/styles/styles.css',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
 ];
 
-// Cache strategi untuk berbagai jenis request
-const CACHE_STRATEGIES = {
-  // Cache first untuk asset statis
-  CACHE_FIRST: 'cache-first',
-  // Network first untuk API dan data dinamis
-  NETWORK_FIRST: 'network-first',
-  // Stale while revalidate untuk konten yang bisa outdated
-  STALE_WHILE_REVALIDATE: 'stale-while-revalidate',
-};
-
-// Install event - cache static resources
+// Instalasi: Cache aset statis
 self.addEventListener('install', (event) => {
-  console.log('Service Worker: Installing...');
-  
+  console.log('[ServiceWorker] Install');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Service Worker: Caching static files');
-        return cache.addAll(STATIC_CACHE_URLS);
-      })
-      .then(() => {
-        console.log('Service Worker: Installed and ready');
-        // Force activate immediately
-        return self.skipWaiting();
-      })
-      .catch((error) => {
-        console.error('Service Worker: Install failed', error);
-      })
+      .then(cache => cache.addAll(STATIC_CACHE_URLS))
+      .then(() => self.skipWaiting())
+      .catch(err => console.error('[ServiceWorker] Caching failed:', err))
   );
 });
 
-// Activate event - clean up old caches
+// Aktivasi: Hapus cache lama
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activating...');
-  
+  console.log('[ServiceWorker] Activate');
   event.waitUntil(
-    caches.keys()
-      .then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => {
-            // Delete old cache versions
-            if (cacheName !== CACHE_NAME) {
-              console.log('Service Worker: Deleting old cache', cacheName);
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      })
-      .then(() => {
-        console.log('Service Worker: Activated');
-        // Take control of all pages immediately
-        return self.clients.claim();
-      })
+    caches.keys().then(cacheNames =>
+      Promise.all(
+        cacheNames.map(name => {
+          if (name !== CACHE_NAME) {
+            console.log('[ServiceWorker] Deleting old cache:', name);
+            return caches.delete(name);
+          }
+        })
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
-// Fetch event - handle network requests
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-  
-  // Skip non-GET requests
-  if (request.method !== 'GET') {
-    return;
-  }
-  
-  // Skip chrome-extension and other protocols
-  if (!url.protocol.startsWith('http')) {
-    return;
-  }
-  
-  event.respondWith(handleFetch(request));
-});
-
-async function handleFetch(request) {
-  const url = new URL(request.url);
-  
-  try {
-    // Determine cache strategy based on request type
-    if (isStaticAsset(url)) {
-      return await cacheFirst(request);
-    } else if (isApiRequest(url)) {
-      return await networkFirst(request);
-    } else {
-      return await staleWhileRevalidate(request);
-    }
-  } catch (error) {
-    console.error('Service Worker: Fetch failed', error);
-    return await handleOfflineRequest(request);
-  }
-}
-
-// Cache First Strategy - untuk static assets
+// Strategi Cache First
 async function cacheFirst(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
-  
-  if (cached) {
-    return cached;
+  if (cached) return cached;
+
+  try {
+    const network = await fetch(request);
+    if (network && network.status === 200) {
+      cache.put(request, network.clone());
+    }
+    return network;
+  } catch (err) {
+    return caches.match('/offline.html');
   }
-  
-  const response = await fetch(request);
-  
-  // Cache successful responses
-  if (response.status === 200) {
-    cache.put(request, response.clone());
-  }
-  
-  return response;
 }
 
-// Network First Strategy - untuk API requests
+// Strategi Network First untuk API
 async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
-  
   try {
     const response = await fetch(request);
-    
-    // Cache successful responses
-    if (response.status === 200) {
+    if (response && response.status === 200) {
       cache.put(request, response.clone());
     }
-    
     return response;
-  } catch (error) {
-    // Return cached version if network fails
+  } catch (err) {
     const cached = await cache.match(request);
-    if (cached) {
-      return cached;
-    }
-    throw error;
+    return cached || new Response('Offline data not available', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'text/plain' },
+    });
   }
 }
 
-// Stale While Revalidate Strategy
-async function staleWhileRevalidate(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  
-  // Fetch in background to update cache
-  const fetchPromise = fetch(request).then((response) => {
-    if (response.status === 200) {
-      cache.put(request, response.clone());
-    }
-    return response;
-  });
-  
-  // Return cached version immediately if available
-  return cached || fetchPromise;
-}
-
-// Handle offline requests
-async function handleOfflineRequest(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  
-  if (cached) {
-    return cached;
-  }
-  
-  // Return offline page or fallback response
-  if (request.mode === 'navigate') {
-    const offlinePage = await cache.match('/');
-    if (offlinePage) {
-      return offlinePage;
-    }
-  }
-  
-  // Return basic offline response
-  return new Response('Offline - Content not available', {
-    status: 503,
-    statusText: 'Service Unavailable',
-    headers: { 'Content-Type': 'text/plain' },
-  });
-}
-
-// Helper functions
+// Cek tipe resource
 function isStaticAsset(url) {
-  const staticExtensions = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2'];
-  return staticExtensions.some(ext => url.pathname.endsWith(ext));
+  return /\.(?:css|js|png|jpg|jpeg|gif|svg|ico|woff2?)$/.test(url.pathname);
 }
 
 function isApiRequest(url) {
-  // Sesuaikan dengan endpoint API Anda
-  return url.pathname.startsWith('/api/') || url.pathname.includes('api');
+  return url.pathname.startsWith('/api/') || url.hostname.includes('api');
 }
 
-// Push notification event
+// Fetch Event Handler
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  if (request.method !== 'GET' || !url.protocol.startsWith('http')) return;
+
+  if (isStaticAsset(url)) {
+    event.respondWith(cacheFirst(request));
+  } else if (isApiRequest(url)) {
+    event.respondWith(networkFirst(request));
+  } else {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request).then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, networkResponse.clone());
+            });
+          }
+          return networkResponse;
+        }).catch(() => cached);
+        return cached || fetchPromise;
+      })
+    );
+  }
+});
+
+// Push Notification Handler
 self.addEventListener('push', (event) => {
-  console.log('Service Worker: Push event received');
-  
-  let notificationData = {
+  console.log('[ServiceWorker] Push event received');
+
+  let data = {
     title: 'New Notification',
-    body: 'You have a new message',
-    icon: '/images/icon-192x192.png',
-    badge: '/images/badge-72x72.png',
-    tag: 'default-notification',
+    body: 'You have new content!',
+    icon: '/icon-192x192.png',
+    badge: '/icon-192x192.png',
+    tag: 'general-notification',
     requireInteraction: false,
-    actions: [
-      {
-        action: 'open',
-        title: 'Open App',
-        icon: '/images/action-open.png'
-      },
-      {
-        action: 'close',
-        title: 'Close',
-        icon: '/images/action-close.png'
-      }
-    ]
+    data: { url: '/' }
   };
-  
-  // Parse push data if available
+
   if (event.data) {
     try {
-      const pushData = event.data.json();
-      notificationData = { ...notificationData, ...pushData };
-    } catch (error) {
-      console.error('Service Worker: Error parsing push data', error);
-      notificationData.body = event.data.text() || notificationData.body;
+      const json = event.data.json();
+      data = { ...data, ...json };
+      if (!data.data) data.data = { url: data.url || '/' };
+    } catch (err) {
+      data.body = event.data.text(); // fallback untuk plain text
     }
   }
-  
+
   event.waitUntil(
-    self.registration.showNotification(notificationData.title, {
-      body: notificationData.body,
-      icon: notificationData.icon,
-      badge: notificationData.badge,
-      tag: notificationData.tag,
-      requireInteraction: notificationData.requireInteraction,
-      actions: notificationData.actions,
-      data: notificationData.data || { url: '/' }
+    (async () => {
+      try {
+        await self.registration.showNotification(data.title, {
+          body: data.body,
+          icon: data.icon,
+          badge: data.badge,
+          tag: data.tag,
+          requireInteraction: data.requireInteraction,
+          data: data.data,
+          actions: data.actions || [],
+        });
+      } catch (err) {
+        console.warn('[ServiceWorker] Notification error:', err.message);
+      }
+    })()
+  );
+});
+
+// Notification click
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+
+  if (event.action === 'close') return;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientsArr => {
+      for (const client of clientsArr) {
+        if (client.url === url && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
     })
   );
 });
 
-// Notification click event
-self.addEventListener('notificationclick', (event) => {
-  console.log('Service Worker: Notification clicked');
-  
-  event.notification.close();
-  
-  const action = event.action;
-  const notificationData = event.notification.data || {};
-  const urlToOpen = notificationData.url || '/';
-  
-  if (action === 'close') {
-    return;
-  }
-  
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        // Check if app is already open
-        for (let client of clientList) {
-          if (client.url === urlToOpen && 'focus' in client) {
-            return client.focus();
-          }
-        }
-        
-        // Open new window if app is not open
-        if (clients.openWindow) {
-          return clients.openWindow(urlToOpen);
-        }
-      })
-  );
-});
-
-// Background sync event (optional)
-self.addEventListener('sync', (event) => {
-  console.log('Service Worker: Background sync triggered');
-  
-  if (event.tag === 'background-sync') {
-    event.waitUntil(handleBackgroundSync());
-  }
-});
-
-async function handleBackgroundSync() {
-  // Implement background sync logic here
-  // Misalnya: sync data offline, kirim analytics, dll
-  console.log('Service Worker: Performing background sync');
-}
-
-// Message event - communicate with main thread
+// Message listener (e.g. skipWaiting)
 self.addEventListener('message', (event) => {
-  console.log('Service Worker: Message received', event.data);
-  
-  const { type, payload } = event.data;
-  
-  switch (type) {
+  if (!event.data) return;
+  switch (event.data.type) {
     case 'SKIP_WAITING':
       self.skipWaiting();
       break;
-    case 'GET_VERSION':
-      event.ports[0].postMessage({ version: CACHE_VERSION });
-      break;
-    case 'CLEAR_CACHE':
-      clearAllCaches().then(() => {
-        event.ports[0].postMessage({ success: true });
-      });
-      break;
     default:
-      console.log('Service Worker: Unknown message type', type);
+      break;
   }
 });
-
-async function clearAllCaches() {
-  const cacheNames = await caches.keys();
-  return Promise.all(
-    cacheNames.map(cacheName => caches.delete(cacheName))
-  );
-}
