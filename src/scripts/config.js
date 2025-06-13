@@ -1,6 +1,8 @@
 const CONFIG = {
   BASE_URL: 'https://story-api.dicoding.dev/v1',
-  VAPID_PUBLIC_KEY: 'BNoEf6-3VYZuTNo4qflAP8HzD9x-BGSOTpGVEz5ZljZPWMXyS54XAViqWCtA6xGYBv2Th7l3859cu6EmIWcetZARB0YJffpOe9UqzIxz5ehYjXxy3sQ',
+  // Update dengan VAPID key baru yang Anda hasilkan
+  VAPID_PUBLIC_KEY: 'BJIVNSQvd6RuIrezyIQWddiE0CtDUZaJ02ZC5yTWjn202tc6juMTs3zMCb4A73pt2m-3eenY6RlxKXcmUoicBUg',
   ACCESS_TOKEN: 'access-token',
 };
 export default CONFIG;
+

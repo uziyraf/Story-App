@@ -97,46 +97,92 @@ export async function getStoryDetail({ token, id }) {
   return response.json();
 }
 
-export async function subscribeNotification({ subscription }) {
-  // subscription is an object with endpoint, keys.p256dh, keys.auth
+export async function subscribeNotification({ endpoint, keys }) {
+  // Pastikan parameter yang diterima sesuai format
+  if (!endpoint || !keys) {
+    console.error('Invalid subscription parameters:', { endpoint, keys });
+    throw new Error('Invalid subscription parameters');
+  }
+  
   const token = localStorage.getItem('accessToken');
+  if (!token) {
+    throw new Error('User is not authenticated');
+  }
+  
+  // Format body sesuai dengan yang diharapkan API
   const body = {
-    endpoint: subscription.endpoint,
-    keys: {
-      p256dh: subscription.keys.p256dh,
-      auth: subscription.keys.auth,
-    },
+    endpoint,
+    keys
   };
+  
+  console.log('Sending subscription to server:', body);
 
-  const response = await fetch(ENDPOINTS.NOTIFICATIONS_SUBSCRIBE, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
-  return response.json();
+  try {
+    const response = await fetch(ENDPOINTS.NOTIFICATIONS_SUBSCRIBE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+    
+    const responseData = await response.json();
+    console.log('Server response data:', responseData);
+    
+    return {
+      ...responseData,
+      error: false,
+      ok: response.ok,
+      status: response.status,
+    };
+  } catch (error) {
+    console.error('Error in subscribeNotification:', error);
+    return {
+      error: true,
+      message: error.message || 'Network error',
+    };
+  }
 }
 
-export async function unsubscribeNotification({ subscription }) {
-  const token = localStorage.getItem('accessToken');;
-  const body = { 
-    endpoint: subscription.endpoint,
-  };
+export async function unsubscribeNotification({ endpoint }) {
+  if (!endpoint) {
+    console.error('Invalid unsubscribe parameter: endpoint is missing');
+    throw new Error('Invalid unsubscribe parameter');
+  }
+  
+  const token = localStorage.getItem('accessToken');
+  if (!token) {
+    throw new Error('User is not authenticated');
+  }
+  
+  const body = { endpoint };
+  console.log('Sending unsubscribe request:', body);
 
-  const response = await fetch(ENDPOINTS.NOTIFICATIONS_SUBSCRIBE, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  try {
+    const response = await fetch(ENDPOINTS.NOTIFICATIONS_SUBSCRIBE, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
-  const json = await response.json();
-  return {
-    ok: response.ok,
-    ...json,
-  };
+    const json = await response.json();
+    return {
+      ...json,
+      error: false,
+      ok: response.ok,
+    };
+  } catch (error) {
+    console.error('Error in unsubscribeNotification:', error);
+    return {
+      error: true,
+      message: error.message || 'Network error',
+    };
+  }
 }
+
+
+

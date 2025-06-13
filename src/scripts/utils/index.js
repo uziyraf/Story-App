@@ -15,38 +15,70 @@ export function isServiceWorkerAvailable() {
   return 'serviceWorker' in navigator;
 }
  
-export async function registerServiceWorker() {
-  if (!isServiceWorkerAvailable()) {
-    console.log('Service Worker API unsupported');
-    return;
+export const registerServiceWorker = async () => {
+  if (!('serviceWorker' in navigator)) {
+    console.log('Service Worker not supported in the browser');
+    return null;
   }
 
-  if (process.env.NODE_ENV === 'development') {
-    // Unregister service workers in development mode to prevent reload loops
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    for (const registration of registrations) {
-      await registration.unregister();
-    }
-    console.log('Service workers unregistered in development mode. (only in dev mode, soalnya hot reload mulu :) aku bingung)');
-    return;
-  }
- 
   try {
-    const registration = await navigator.serviceWorker.register('/sw.bundle.js');
-    console.log('Service worker telah terpasang', registration);
+    // Make sure path matches webpack output and is relative to the current origin
+    const swPath = './sw.bundle.js';
+    console.log('Registering service worker at path:', swPath);
+    
+    const registration = await navigator.serviceWorker.register(swPath);
+    console.log('Service worker registered successfully:', registration);
+    
+    // Wait for the service worker to be ready
+    await navigator.serviceWorker.ready;
+    console.log('Service worker is ready');
+    
+    // Handle update
+    registration.addEventListener('updatefound', () => {
+      const newWorker = registration.installing;
+      if (newWorker) {
+        newWorker.addEventListener('statechange', () => {
+          console.log('Service worker state changed to:', newWorker.state);
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('New service worker available');
+            if (confirm('New version available! Reload to update?')) {
+              window.location.reload();
+            }
+          }
+        });
+      }
+    });
+    
+    return registration;
   } catch (error) {
-    console.log('Failed to install service worker:', error);
+    console.error('Failed to register service worker:', error);
+    return null;
   }
-}
+};
 
 export function convertBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = atob(base64);
+  // First, ensure we're working with a proper base64 string
+  // by replacing web-safe characters with standard base64 characters
+  const normalizedBase64 = base64String.replace(/-/g, '+').replace(/_/g, '/');
+  
+  // Add padding if needed
+  const padding = '='.repeat((4 - (normalizedBase64.length % 4)) % 4);
+  const base64 = normalizedBase64 + padding;
+  
+  // Convert base64 to binary string
+  const rawData = window.atob(base64);
+  
+  // Convert binary string to Uint8Array
   const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; i++) {
+  for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
+  
   return outputArray;
 }
+
+
+
+
+
+
