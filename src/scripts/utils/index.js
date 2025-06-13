@@ -22,11 +22,14 @@ export const registerServiceWorker = async () => {
   }
 
   try {
-    // Make sure path matches webpack output and is relative to the current origin
-    const swPath = './sw.bundle.js';
+    // Ubah path agar berfungsi di Netlify
+    const swPath = '/sw.bundle.js';
     console.log('Registering service worker at path:', swPath);
     
-    const registration = await navigator.serviceWorker.register(swPath);
+    // Tambahkan scope eksplisit
+    const registration = await navigator.serviceWorker.register(swPath, {
+      scope: '/'
+    });
     console.log('Service worker registered successfully:', registration);
     
     // Wait for the service worker to be ready
@@ -76,6 +79,8 @@ export function convertBase64ToUint8Array(base64String) {
   
   return outputArray;
 }
+
+
 
 
 

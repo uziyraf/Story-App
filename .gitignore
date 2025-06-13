@@ -6,3 +6,6 @@ dist
 
 # Files
 .env
+
+# Local Netlify folder
+.netlify

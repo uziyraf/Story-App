@@ -9,8 +9,19 @@ import { registerServiceWorker } from './utils';
 
 const initializeApp = async () => {
   try {
+    console.log('Initializing app...');
+    
+    // Check if service worker is supported
+    if ('serviceWorker' in navigator) {
+      console.log('Service Worker is supported');
+    } else {
+      console.warn('Service Worker is NOT supported');
+    }
+    
     // Register service worker first
-    await registerServiceWorker();
+    console.log('Attempting to register service worker...');
+    const registration = await registerServiceWorker();
+    console.log('Service worker registration result:', registration);
 
     // Initialize main app
     const app = new App({
