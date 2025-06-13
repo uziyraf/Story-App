@@ -127,4 +127,17 @@ export default class HomePage {
     storiesContainer.innerHTML = `<p>${message}</p>`;
     storiesContainer.style.display = 'block';
   }
+
+  showOfflineMessage() {
+    this.hideLoading();
+    const storiesContainer = document.getElementById('stories-container');
+    storiesContainer.innerHTML = `
+      <div class="offline-message">
+        <h3>Anda sedang offline</h3>
+        <p>Beberapa fitur mungkin tidak tersedia. Silakan periksa koneksi internet Anda.</p>
+      </div>
+    `;
+    storiesContainer.style.display = 'block';
+  }
 }
+

@@ -11,7 +11,7 @@ const CONFIG = {
 // Precache dan route file-file static
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-// Cache API responses
+// Cache API responses dengan fallback
 registerRoute(
   ({ request, url }) => {
     const baseUrl = new URL(CONFIG.BASE_URL);
@@ -24,6 +24,7 @@ registerRoute(
         statuses: [0, 200],
       }),
     ],
+    networkTimeoutSeconds: 3, // Timeout setelah 3 detik
   })
 );
 
@@ -51,6 +52,19 @@ registerRoute(
                    request.destination === 'font',
   new StaleWhileRevalidate({
     cacheName: 'static-resources',
+  })
+);
+
+// Cache gambar
+registerRoute(
+  ({ request }) => request.destination === 'image',
+  new StaleWhileRevalidate({
+    cacheName: 'images',
+    plugins: [
+      new CacheableResponsePlugin({
+        statuses: [0, 200],
+      }),
+    ],
   })
 );
 
@@ -176,7 +190,33 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-
-
-
+// Fallback untuk API yang tidak tersedia offline
+self.addEventListener('fetch', (event) => {
+  // Hanya tangani permintaan ke API
+  if (event.request.url.includes(CONFIG.BASE_URL)) {
+    event.respondWith(
+      fetch(event.request)
+        .catch(() => {
+          return caches.match(event.request)
+            .then((cachedResponse) => {
+              if (cachedResponse) {
+                return cachedResponse;
+              }
+              
+              // Jika tidak ada cache, kembalikan respons fallback
+              return new Response(
+                JSON.stringify({
+                  error: true,
+                  message: 'Anda sedang offline. Silakan coba lagi nanti.',
+                  listStory: [] // Kembalikan array kosong untuk listStory
+                }),
+                {
+                  headers: { 'Content-Type': 'application/json' }
+                }
+              );
+            });
+        })
+    );
+  }
+});
 

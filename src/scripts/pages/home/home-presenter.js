@@ -15,6 +15,12 @@ class HomePresenter {
     }
 
     try {
+      // Periksa status koneksi
+      if (!navigator.onLine) {
+        this.view.showOfflineMessage();
+        return;
+      }
+
       const response = await getAllStories({
         token,
         page: this.page,
@@ -33,3 +39,5 @@ class HomePresenter {
 }
 
 export default HomePresenter;
+
+
